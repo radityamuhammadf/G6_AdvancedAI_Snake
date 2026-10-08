@@ -454,63 +454,62 @@ class MiniMax(MoveStrategy):
 
 
         return minimax_move
-    
-@register_strategy("Alpha Beta Pruning")
+
+@register_strategy("Alpha Beta")
 class ABPruning(MoveStrategy):
+    # NO HANDLER FOR WHEN THE GAME MODE IS SINGLE PLAYER
     def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
         
+        # Exception if it was chosen in single player
         if len(snapshot.snakes) < 2:
             raise ValueError("Not enough player! Choose MULTIPLAYER MODE for this algorithm")
-        # print(snapshot.snakes) # results tuples that contain each snake information 
         
         # extract snapshot.snakes -> filter the snake that match with snake_id as the agent
         agent = next(s for s in snapshot.snakes if s.snake_id == snake_id)
         opponent = next(s for s in snapshot.snakes if s.snake_id != snake_id)
         
-        agent_legal = snapshot.legal_moves_for(agent.snake_id)
-        opponent_legal = snapshot.legal_moves_for(opponent.snake_id)        
+        # print result: options of legal DIRECTION (did not eat its tail, and not hit the wall)
+        # e.g. = (<Direction.UP: (0, -1)>, <Direction.LEFT: (-1, 0)>, <Direction.RIGHT: (1, 0)>)
+        agent_legal_moves = snapshot.legal_moves_for(agent.snake_id)
+        opponent_legal_moves = snapshot.legal_moves_for(opponent.snake_id)        
 
-        # Terminal State
-        if not agent_legal or not snapshot.apples:
-            return agent.direction
-
-        agent_state = agent.body[0]
-        opponent_state = opponent.body[0]
-
-        print(f"Agent State: {agent_state} ; Opponent State: {opponent_state}")
-
-        def result(state,direction:Direction):
-            dx, dy = direction.vector
-            new_x, new_y = state[0] + dx, state[1] + dy
-            return new_x, new_y
-
+        agent_state = agent.body
+        opponent_state = opponent.body
         
-        #    Here, I'm thinking that utility value would be represented by the average
-        # distance of an agent towards all of available apples.
-        #    Since higher distance means that the snake is not in the most ideal position
-        # I used (1/utility) as a value to return
-        def state_value(state):
-            new_x, new_y = state
+        # print(f"Agent State: {agent_state} ; Opponent State: {opponent_state}")
+
+        # change: new entire body position + legal move
+        def result(snake_body,direction:Direction):
+            dx, dy = direction.vector
+            head_x, head_y = snake_body[0]
+
+            new_body = [(head_x + dx, head_y + dy)] + list(snake_body[:-1])
+            print(f"MOVE RESULT FROM: {direction} \n{new_body}")
+            
+            return new_body
+        
+        def state_value(snake):
+            new_x, new_y = snake[0]
             dist = []
             for apple_x, apple_y in snapshot.apples: # 1. Find all apples and extract each coordinate of them
                 dist.append(abs(new_x - apple_x) + abs(new_y - apple_y)) # 2. Calculate distance from current 
             dist.sort()
-            if sum(dist) != 0:
-                state_value = - (dist[0] - ((sum(dist)/len(dist))*0.5))
-                return round(state_value, 4)
-            else:
-                return 0
-
+            return - dist[0]
+        
         def max_value(state,opponent_state,depth,direction,alpha,beta):
             v = float('-inf')
             move = direction
+            sim_agent_legal_moves = snapshot.legal_moves_for(agent.snake_id)
 
             if not snapshot.apples or depth == 0:
                 # calculate relative score of 
                 node_utility = state_value(state) - state_value(opponent_state) 
                 return node_utility, direction #                              (currently)            
-            for move_option in agent_legal:#   new_state   ;          opponent info ; depth ;  chosen action
-                new_v,new_move = min_value(result(state,move_option), opponent_state, depth-1, move_option, alpha, beta)
+            # new state --> extract legal move from that new state
+            for move_option in sim_agent_legal_moves:#   new_state   ;         depth ;  chosen action
+                new_state = result(state, move_option)
+                
+                new_v,_ = min_value(new_state, opponent_state, depth-1, move_option,alpha,beta)
                 if new_v > v:
                     v = new_v
                     alpha = max(alpha,v)
@@ -523,12 +522,14 @@ class ABPruning(MoveStrategy):
         def min_value(state,opponent_state,depth,direction,alpha,beta): 
             v = float('inf')
             move = direction
+            sim_opponent_legal_moves = snapshot.legal_moves_for(opponent.snake_id)
 
             if not snapshot.apples or depth == 0:
                 node_utility = state_value(state) - state_value(opponent_state) 
                 return node_utility, direction 
-            for move_option in opponent_legal:
-                new_v,new_move = max_value(state,result(opponent_state, move_option), depth-1, move_option, alpha, beta)
+            for move_option in sim_opponent_legal_moves:
+                new_state = result(opponent_state, move_option)
+                new_v,_ = max_value(state, new_state, depth-1, move_option,alpha,beta)
                 if new_v < v:
                     v = new_v
                     beta = min(beta,v)
@@ -537,19 +538,21 @@ class ABPruning(MoveStrategy):
                     return v, move
             return v, move
 
-        best_state_value = max(state_value(result(agent_state,direction)) for direction in agent_legal)
-        best_moves = [direction for direction in agent_legal if state_value(result(agent_state,direction)) == best_state_value]
-
+        
+        initial_move = rng.choice(agent_legal_moves)
         alg_start = datetime.now()
-        alphabeta_utils,alphabeta_move = max_value(agent_state, opponent_state, 2, rng.choice(best_moves),float('-inf'),float('inf'))
-        print(alphabeta_utils)
+        # Limitations: As I don't know how to extract a legal move from a new state
+        # increasing the depth to 3 levels or more cannot be performed, 
+        # Because there's no (or it hasn't discovered) mechanism to update the 
+        # legal move options as the algorithm simulates new state (that will also 
+        # generate new set of legal moves)
+        alphabeta_utils,alphabeta_move = max_value(agent_state, opponent_state, 2, initial_move,float('-inf'),float('inf'))
         time_elapsed = datetime.now() - alg_start
-        print(f"ALPHA BETA: \nChosen Utility Value: {alphabeta_utils} ; Time elapsed: {time_elapsed}")
+        print(f"AB Pruning: \n Chosen Utility Value: {alphabeta_utils} ; Time elapsed: {time_elapsed}")
+
 
         return alphabeta_move
 
-            
-    
 # Assignment template -------------------------------------------------------
 # 1. Copy this class and give it a unique name.
 # 2. Implement choose_move using only the immutable snapshot.
