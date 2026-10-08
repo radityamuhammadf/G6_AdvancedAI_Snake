@@ -13,7 +13,7 @@ The project supports three match types:
 ## Features
 
 - Adjustable grid, apple count, move limit, and AI speed
-- Built-in **Greedy** and **Safe Random** strategies
+- Built-in **Safe Random**, **Greedy**, **BFS**, and **DFS** strategies
 - Independent AI 1 and AI 2 strategy selection in AI vs AI mode
 - Simple registry for adding custom movement strategies
 - Responsive layout for large and compact windows
@@ -152,6 +152,12 @@ class MyStrategy(MoveStrategy):
 
 The registered name appears automatically in the setup screen and text-mode
 strategy choices.
+
+**BFS** explores nearby cells first and returns a shortest path to a reachable
+apple. **DFS** follows one route deeply before backtracking, so it finds a
+reachable apple but does not necessarily choose the shortest route. Both treat
+the current snake and opponent bodies as obstacles while planning and fall back
+to a random legal move if no apple route is found.
 
 ### Strategy contract
 
