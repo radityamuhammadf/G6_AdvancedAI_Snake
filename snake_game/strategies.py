@@ -242,6 +242,85 @@ class DebugStrategy_Greedy(MoveStrategy):
         print(f"best moves: {best_moves}")
         return rng.choice(best_moves)
 
+@register_strategy("DFS")
+class DFSStrategy(MoveStrategy):
+    def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
+        # Cek kondisi sekarang
+        legal = snapshot.legal_moves_for(snake_id)
+        snake = snapshot.snake(snake_id)
+
+        # Ambil kepala ular
+        head = snake.body[0]
+        # Simpan apple dalam set agar mudah di cek
+        apples = set(snapshot.apples)
+
+        # Kotak yang boleh dilewati:
+        # Semua bagian ular kecuali ekor karena dia menjauh seiring ular bergerak
+        occupied = set(snake.body[:-1])
+        # kalau ada lawan
+        for other in snapshot.snakes:
+            if other.snake_id != snake_id:
+                occupied.update(other.body)
+
+        # start dfs, lokasi kepala dan arah
+        stack = [(head, None)]
+        # agar dia tidak ke posisi yang sama
+        visited = {head}
+
+        # mulai
+        while stack:
+            # ambil yang terakhir dari stack
+            current, first_move = stack.pop()
+            # kalau nemu apple gunakan kembali arah yang digunakan untuk mencapai apple
+            if current in apples and first_move is not None:
+                return first_move
+
+            # kordinat sekarang
+            x, y = current
+            for direction in Direction:
+                if current == head and direction not in legal:
+                    continue
+                dx, dy = direction.vector
+                nx, ny = x + dx, y + dy
+                if not (0 <= nx < snapshot.columns and 0 <= ny < snapshot.rows):
+                    continue
+                nxt = (nx, ny)
+                if nxt in occupied or nxt in visited:
+                    continue
+                visited.add(nxt)
+                stack.append((nxt, first_move or direction))
+        return rng.choice(legal)
+
+@register_strategy("UCS")
+class UCSStrategy(MoveStrategy):
+    def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
+        legal = snapshot.legal_moves_for(snake_id)
+        snake = snapshot.snake(snake_id)
+
+        head = snake.body[0]
+        apples = set(snapshot.apples)
+        occupied = set(snake.body[:-1])
+        for other in snapshot.snakes:
+            if other.snake_id != snake_id:
+                occupied.update(other.body)
+        # UCS queue
+        # (cost, position, first_move)
+        queue = [(0, head, None)]
+        # Menyimpan cost terbaik
+        visited = {head: 0}
+        while queue:
+            # Cari node dengan cost paling kecil
+            best_index = 0
+            for i in range(1, len(queue)):
+                if queue[i][0] < queue[best_index][0]:
+                    best_index = i
+            # Ambil node tersebut
+            cost, current, first_move = queue.pop(best_index)
+
+            # Kalau menemukan apple
+            if current in apples and first_move is not None:
+                return first_move
+            x, y = current
     
 @register_strategy("MINIMAX")
 class MiniMax(MoveStrategy):
@@ -439,6 +518,36 @@ class ABPruning(MoveStrategy):
 
         return alphabeta_move
 
+            for direction in Direction:
+                # Langkah pertama harus legal
+                if current == head and direction not in legal:
+                    continue
+                dx, dy = direction.vector
+                nx, ny = x + dx, y + dy
+                # Di luar map
+                if not (0 <= nx < snapshot.columns and
+                        0 <= ny < snapshot.rows):
+                    continue
+
+                nxt = (nx, ny)
+                # Menabrak obstacle
+                if nxt in occupied:
+                    continue
+                # Setiap gerakan mempunyai cost 1
+                new_cost = cost + 1
+
+                # Kalau belum pernah ditemukan
+                # atau ditemukan dengan cost lebih kecil
+                if nxt not in visited or new_cost < visited[nxt]:
+                    visited[nxt] = new_cost
+                    if first_move is None:
+                        next_first_move = direction
+                    else:
+                        next_first_move = first_move
+
+                    queue.append((new_cost, nxt, next_first_move))
+        return rng.choice(legal)
+    
 # Assignment template -------------------------------------------------------
 # 1. Copy this class and give it a unique name.
 # 2. Implement choose_move using only the immutable snapshot.
