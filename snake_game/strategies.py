@@ -321,6 +321,36 @@ class UCSStrategy(MoveStrategy):
             if current in apples and first_move is not None:
                 return first_move
             x, y = current
+        
+            for direction in Direction:
+                # Langkah pertama harus legal
+                if current == head and direction not in legal:
+                    continue
+                dx, dy = direction.vector
+                nx, ny = x + dx, y + dy
+                # Di luar map
+                if not (0 <= nx < snapshot.columns and
+                        0 <= ny < snapshot.rows):
+                    continue
+
+                nxt = (nx, ny)
+                # Menabrak obstacle
+                if nxt in occupied:
+                    continue
+                # Setiap gerakan mempunyai cost 1
+                new_cost = cost + 1
+
+                # Kalau belum pernah ditemukan
+                # atau ditemukan dengan cost lebih kecil
+                if nxt not in visited or new_cost < visited[nxt]:
+                    visited[nxt] = new_cost
+                    if first_move is None:
+                        next_first_move = direction
+                    else:
+                        next_first_move = first_move
+
+                    queue.append((new_cost, nxt, next_first_move))
+        return rng.choice(legal)
     
 @register_strategy("MINIMAX")
 class MiniMax(MoveStrategy):
