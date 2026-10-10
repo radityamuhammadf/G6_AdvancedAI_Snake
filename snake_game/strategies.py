@@ -354,7 +354,7 @@ class MiniMax(MoveStrategy):
     # NO HANDLER FOR WHEN THE GAME MODE IS SINGLE PLAYER
     def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
         
-        DEPTH_VALUE = 6
+        DEPTH_VALUE = 2
         state_evaluated = 0
         state_pruned = 0
         # Exception if it was chosen in single player
@@ -412,7 +412,7 @@ class MiniMax(MoveStrategy):
 
             nonlocal state_evaluated
 
-            if not snapshot.apples or depth == 0:
+            if not snapshot.apples or depth == 0 or not sim_agent_legal_moves:
                 # calculate relative score of 
                 node_utility = state_value(state) - state_value(opponent_state) 
                 return node_utility, direction #                              (currently)            
@@ -433,7 +433,7 @@ class MiniMax(MoveStrategy):
 
             nonlocal state_evaluated
 
-            if not snapshot.apples or depth == 0:
+            if not snapshot.apples or depth == 0 or not sim_opponent_legal_moves:
                 node_utility = state_value(state) - state_value(opponent_state) 
                 return node_utility, direction 
             for move_option in sim_opponent_legal_moves:
@@ -470,7 +470,7 @@ class ABPruning(MoveStrategy):
     # NO HANDLER FOR WHEN THE GAME MODE IS SINGLE PLAYER
     def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
 
-        DEPTH_VALUE = 6
+        DEPTH_VALUE = 8
         state_evaluated = 0
         state_pruned = 0
 
