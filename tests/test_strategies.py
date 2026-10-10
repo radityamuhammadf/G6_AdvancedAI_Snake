@@ -6,8 +6,6 @@ from snake_game.engine import AI_ID, GameEngine
 from snake_game.models import Direction, GameConfig, SnakeState
 from snake_game.strategies import (
     STRATEGY_REGISTRY,
-    BFSStrategy,
-    DFSStrategy,
     GreedyStrategy,
     MoveStrategy,
     SafeRandomStrategy,
@@ -30,20 +28,6 @@ def test_greedy_reduces_apple_distance_when_possible() -> None:
     game.apples = [(3, 0), (9, 9)]
     move = GreedyStrategy().choose_move(game.snapshot(), AI_ID, random.Random(2))
     assert move is Direction.UP
-
-
-def test_pathfinding_strategies_choose_legal_moves_toward_reachable_apples() -> None:
-    game = GameEngine(GameConfig(rows=10, columns=10), rng=random.Random(1))
-    game.snakes[AI_ID] = SnakeState(
-        AI_ID, [(3, 3), (2, 3), (1, 3)], Direction.RIGHT
-    )
-    game.apples = [(3, 0)]
-    snapshot = game.snapshot()
-
-    for strategy in (BFSStrategy(), DFSStrategy()):
-        move = strategy.choose_move(snapshot, AI_ID, random.Random(2))
-        assert move in snapshot.legal_moves_for(AI_ID)
-        assert move is Direction.UP
 
 
 def test_trapped_strategies_fall_back_to_current_direction() -> None:

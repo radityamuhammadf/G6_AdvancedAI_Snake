@@ -20,9 +20,7 @@ class MoveStrategy(ABC):
     ) -> Direction:
         """Return the direction for ``snake_id`` for the current turn."""
 
-
 STRATEGY_REGISTRY: dict[str, type[MoveStrategy]] = {}
-
 
 def register_strategy(name: str) -> Callable[[type[MoveStrategy]], type[MoveStrategy]]:
     """Register a strategy class so it appears in the setup-screen dropdown."""
@@ -34,7 +32,6 @@ def register_strategy(name: str) -> Callable[[type[MoveStrategy]], type[MoveStra
         return strategy_class
 
     return decorator
-
 
 def create_strategy(name: str) -> MoveStrategy:
     try:
@@ -78,123 +75,159 @@ class GreedyStrategy(MoveStrategy):
     
 @register_strategy("BFS")
 class BFSStrategy(MoveStrategy):
+    step_count = 0
     def choose_move(self, snapshot, snake_id, rng) -> Direction:
-        legal_moves = snapshot.legal_moves_for(snake_id)
-        snake = snapshot.snake(snake_id)
+        start_time = time.perf_counter()
+        self.step_count += 1
+        states_evaluated = 0
+        states_expanded = 0
+        states_generated = 0
+        path_length = None
+        try:
+            legal_moves = snapshot.legal_moves_for(snake_id)
+            snake = snapshot.snake(snake_id)
+            if not legal_moves:
+                return snake.direction
+            if not snapshot.apples:
+                return rng.choice(legal_moves)
+            apples = set(snapshot.apples)
+            head_x, head_y = snake.body[0]
+            visited = {(head_x, head_y)}
+            queue = deque()
+            states_generated = 1  # posisi kepala sebagai node awal
+            states_expanded = 1 # legal_moves
 
-        if not legal_moves:
-            return snake.direction
+            occupied = {
+                position 
+                for other_snake in snapshot.snakes
+                for position in other_snake.body
+            }
 
-        if not snapshot.apples:
-            return rng.choice(legal_moves)
-
-        apples = set(snapshot.apples)
-        head_x, head_y = snake.body[0]
-        visited = {(head_x, head_y)}
-        queue = deque()
-
-        occupied = {
-            position 
-            for other_snake in snapshot.snakes
-            for position in other_snake.body
-        }
-
-        for direction in legal_moves:
-            dx, dy = direction.vector
-            position = (head_x + dx, head_y + dy)
-            queue.append((position, direction))
-            visited.add(position)
-
-        while queue:
-            position, first_move = queue.popleft()
-            if position in apples:
-                return first_move
-            x, y = position
-            for direction in Direction:
+            for direction in legal_moves:
                 dx, dy = direction.vector
-                neighbor = (x + dx, y + dy)
-                nx, ny = neighbor
-                inside_board = (
-                    0 <= nx < snapshot.columns
-                    and 0 <= ny < snapshot.rows
-                )
-                if not inside_board:
-                    continue
-                if neighbor in visited or neighbor in occupied:
-                    continue
-                visited.add(neighbor)
-                queue.append((neighbor, first_move))
+                position = (head_x + dx, head_y + dy)
+                queue.append((position, direction, 1))
+                states_generated += 1
+                visited.add(position)
 
-        return rng.choice(legal_moves)
+            while queue:
+                position, first_move, depth = queue.popleft()
+                states_evaluated += 1
+                if position in apples:
+                    path_length = depth
+                    return first_move
+                states_expanded += 1
+                x, y = position
+                for direction in Direction:
+                    dx, dy = direction.vector
+                    neighbor = (x + dx, y + dy)
+                    nx, ny = neighbor
+                    inside_board = (
+                        0 <= nx < snapshot.columns
+                        and 0 <= ny < snapshot.rows
+                    )
+                    if not inside_board:
+                        continue
+                    if neighbor in visited or neighbor in occupied:
+                        continue
+                    visited.add(neighbor)
+                    queue.append((neighbor, first_move, depth + 1))
+                    states_generated += 1
+            return rng.choice(legal_moves)
+        finally:
+            time_step = (time.perf_counter() - start_time) * 1000
+            food_collected = len(snapshot.snake(snake_id).body) - 3
+            path_display = path_length if path_length is not None else "N/A"
+            print(f"{self.step_count},{food_collected},{states_evaluated},{states_expanded},{states_generated},{path_display},{time_step:.3f}")
 
 @register_strategy("ASTAR")
-class MyStrategy(MoveStrategy):
+class ASTARStrategy(MoveStrategy):
+    step_count = 0
     def choose_move(self, snapshot, snake_id, rng):
-        def heuristic(position):
-            return min(
-                abs(position[0] - apple[0]) + abs(position[1] - apple[1])
-                for apple in snapshot.apples
-            )   
+        try:
+            start_time = time.perf_counter()
+            self.step_count += 1
+            states_evaluated = 0
+            states_expanded = 0
+            states_generated = 0
+            path_length = None
+            def heuristic(position):
+                return min(
+                    abs(position[0] - apple[0]) + abs(position[1] - apple[1])
+                    for apple in snapshot.apples
+                )   
 
-        snake = snapshot.snake(snake_id)
-        head = snake.body[0]
-        legal_moves = snapshot.legal_moves_for(snake_id)
-        apples = set(snapshot.apples)
+            snake = snapshot.snake(snake_id)
+            head = snake.body[0]
+            legal_moves = snapshot.legal_moves_for(snake_id)
+            apples = set(snapshot.apples)
 
-        if not legal_moves:
-            return snake.direction
-        if not snapshot.apples:
-            return rng.choice(legal_moves)
-        
-        gn = {head : 0}
+            if not legal_moves:
+                return snake.direction
+            if not snapshot.apples:
+                return rng.choice(legal_moves)
+            
+            gn = {head : 0}
 
-        occupied = {
-            position 
-            for other_snake in snapshot.snakes
-            for position in other_snake.body
-        }
+            occupied = {
+                position 
+                for other_snake in snapshot.snakes
+                for position in other_snake.body
+            }
 
-        queue = []
-        order = count()
-        head_x, head_y = head
-        for direction in legal_moves:
-            dx, dy = direction.vector
-            position = (head_x + dx, head_y + dy)
-            gn[position] = 1
-            fn = gn[position] + heuristic(position)
-            heappush(
-                queue,
-                (fn, next(order), 1, position, direction),
-            )
-        while queue:
-            _, _, current_g, position, first_move = heappop(queue)
-            if current_g != gn[position]:
-                continue
-            if position in apples:
-                return first_move
-            x, y = position
-            for direction in Direction:
+            queue = []
+            order = count()
+            head_x, head_y = head
+            states_generated = 1  # posisi kepala sebagai node awal
+            states_expanded = 1 # legal_moves
+            for direction in legal_moves:
                 dx, dy = direction.vector
-                neighbor = (x + dx, y + dy)
-                nx, ny = neighbor
-                inside_board = (
-                    0 <= nx < snapshot.columns
-                    and 0 <= ny < snapshot.rows
-                )
-                if not inside_board:
-                    continue
-                if neighbor in occupied:
-                    continue
-                new_g = current_g + 1
-                if new_g >= gn.get(neighbor, float("inf")):
-                    continue
-                gn[neighbor] = new_g
-                fn = new_g + heuristic(neighbor)
+                position = (head_x + dx, head_y + dy)
+                gn[position] = 1
+                fn = gn[position] + heuristic(position)
                 heappush(
                     queue,
-                    (fn, next(order), new_g, neighbor, first_move),
+                    (fn, next(order), 1, position, direction),
                 )
-        return rng.choice(legal_moves)
+                states_generated += 1
+            while queue:
+                _, _, current_g, position, first_move = heappop(queue)
+                if current_g != gn[position]:
+                    continue
+                states_evaluated += 1
+                if position in apples:
+                    path_length = current_g
+                    return first_move
+                x, y = position
+                states_expanded += 1
+                for direction in Direction:
+                    dx, dy = direction.vector
+                    neighbor = (x + dx, y + dy)
+                    nx, ny = neighbor
+                    inside_board = (
+                        0 <= nx < snapshot.columns
+                        and 0 <= ny < snapshot.rows
+                    )
+                    if not inside_board:
+                        continue
+                    if neighbor in occupied:
+                        continue
+                    new_g = current_g + 1
+                    if new_g >= gn.get(neighbor, float("inf")):
+                        continue
+                    gn[neighbor] = new_g
+                    fn = new_g + heuristic(neighbor)
+                    heappush(
+                        queue,
+                        (fn, next(order), new_g, neighbor, first_move),
+                    )
+                    states_generated += 1
+            return rng.choice(legal_moves)
+        finally:
+            time_step = (time.perf_counter() - start_time) * 1000
+            food_collected = len(snapshot.snake(snake_id).body) - 3
+            path_display = path_length if path_length is not None else "N/A"
+            print(f"{self.step_count},{food_collected},{states_evaluated},{states_expanded},{states_generated},{path_display},{time_step:.3f}")
     
 @register_strategy("REV. ENG. MODE")
 class DebugStrategy_Greedy(MoveStrategy):
