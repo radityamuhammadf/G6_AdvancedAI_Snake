@@ -245,48 +245,45 @@ class DebugStrategy_Greedy(MoveStrategy):
 @register_strategy("DFS")
 class DFSStrategy(MoveStrategy):
     def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
-        # Cek kondisi sekarang
         legal = snapshot.legal_moves_for(snake_id)
+        if not legal:
+            return Direction.UP
         snake = snapshot.snake(snake_id)
-
-        # Ambil kepala ular
         head = snake.body[0]
-        # Simpan apple dalam set agar mudah di cek
         apples = set(snapshot.apples)
 
-        # Kotak yang boleh dilewati:
-        # Semua bagian ular kecuali ekor karena dia menjauh seiring ular bergerak
+        if not apples:
+            return rng.choice(legal)
+
         occupied = set(snake.body[:-1])
-        # kalau ada lawan
         for other in snapshot.snakes:
             if other.snake_id != snake_id:
                 occupied.update(other.body)
 
-        # start dfs, lokasi kepala dan arah
+        target_apple = min(apples, key=lambda a: abs(a[0] - head[0]) + abs(a[1] - head[1]))
         stack = [(head, None)]
-        # agar dia tidak ke posisi yang sama
         visited = {head}
-
-        # mulai
         while stack:
-            # ambil yang terakhir dari stack
             current, first_move = stack.pop()
-            # kalau nemu apple gunakan kembali arah yang digunakan untuk mencapai apple
             if current in apples and first_move is not None:
                 return first_move
-
-            # kordinat sekarang
-            x, y = current
+            cx, cy = current
+            neighbors = []
             for direction in Direction:
                 if current == head and direction not in legal:
                     continue
                 dx, dy = direction.vector
-                nx, ny = x + dx, y + dy
+                nx, ny = cx + dx, cy + dy
                 if not (0 <= nx < snapshot.columns and 0 <= ny < snapshot.rows):
                     continue
                 nxt = (nx, ny)
                 if nxt in occupied or nxt in visited:
                     continue
+                dist = abs(nx - target_apple[0]) + abs(ny - target_apple[1])
+                neighbors.append((dist, direction, nxt))
+
+            neighbors.sort(key=lambda item: item[0], reverse=True)
+            for _, direction, nxt in neighbors:
                 visited.add(nxt)
                 stack.append((nxt, first_move or direction))
         return rng.choice(legal)
@@ -368,7 +365,7 @@ class MiniMax(MoveStrategy):
         # print result: options of legal DIRECTION (did not eat its tail, and not hit the wall)
         # e.g. = (<Direction.UP: (0, -1)>, <Direction.LEFT: (-1, 0)>, <Direction.RIGHT: (1, 0)>)
         agent_legal_moves = snapshot.legal_moves_for(agent.snake_id)
-        opponent_legal_moves = snapshot.legal_moves_for(opponent.snake_id)        
+        # opponent_legal_moves = snapshot.legal_moves_for(opponent.snake_id)        
 
         agent_state = agent.body
         opponent_state = opponent.body
@@ -505,6 +502,8 @@ class ABPruning(MoveStrategy):
                 # calculate relative score of 
                 node_utility = state_value(state) - state_value(opponent_state) 
                 return node_utility, direction #                              (currently)            
+            for move_option in agent_legal:#   new_state   ;          opponent info ; depth ;  chosen action
+                new_v = min_value(result(state,move_option), opponent_state, depth-1, move_option, alpha, beta)
             # new state --> extract legal move from that new state
             for move_option in sim_agent_legal_moves:#   new_state   ;         depth ;  chosen action
                 new_state = result(state, move_option)
