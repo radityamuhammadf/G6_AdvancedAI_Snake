@@ -6,7 +6,7 @@ from random import Random
 from collections import deque
 from .models import Direction, GameSnapshot
 
-from datetime import datetime
+import time
 
 from heapq import heappush, heappop
 from itertools import count
@@ -442,14 +442,14 @@ class MiniMax(MoveStrategy):
 
         
         initial_move = rng.choice(agent_legal_moves)
-        alg_start = datetime.now()
+        alg_start = time.perf_counter()
         # Limitations: As I don't know how to extract a legal move from a new state
         # increasing the depth to 3 levels or more cannot be performed, 
         # Because there's no (or it hasn't discovered) mechanism to update the 
         # legal move options as the algorithm simulates new state (that will also 
         # generate new set of legal moves)
         minimax_utils,minimax_move = max_value(agent_state, opponent_state, 2, initial_move)
-        time_elapsed = datetime.now() - alg_start
+        time_elapsed = time.perf_counter() - alg_start
         print(f"MINIMAX: \n Chosen Utility Value: {minimax_utils} ; Time elapsed: {time_elapsed}")
 
 
@@ -459,7 +459,8 @@ class MiniMax(MoveStrategy):
 class ABPruning(MoveStrategy):
     # NO HANDLER FOR WHEN THE GAME MODE IS SINGLE PLAYER
     def choose_move(self, snapshot: GameSnapshot, snake_id: str, rng: Random) -> Direction:
-        
+
+        DEPTH_VALUE = 2
         # Exception if it was chosen in single player
         if len(snapshot.snakes) < 2:
             raise ValueError("Not enough player! Choose MULTIPLAYER MODE for this algorithm")
@@ -499,6 +500,7 @@ class ABPruning(MoveStrategy):
         def max_value(state,opponent_state,depth,direction,alpha,beta):
             v = float('-inf')
             move = direction
+            # fail to get simulated legal move
             sim_agent_legal_moves = snapshot.legal_moves_for(agent.snake_id)
 
             if not snapshot.apples or depth == 0:
@@ -522,6 +524,8 @@ class ABPruning(MoveStrategy):
         def min_value(state,opponent_state,depth,direction,alpha,beta): 
             v = float('inf')
             move = direction
+            # fail to get simulated legal move
+
             sim_opponent_legal_moves = snapshot.legal_moves_for(opponent.snake_id)
 
             if not snapshot.apples or depth == 0:
@@ -540,14 +544,14 @@ class ABPruning(MoveStrategy):
 
         
         initial_move = rng.choice(agent_legal_moves)
-        alg_start = datetime.now()
+        alg_start = time.perf_counter()
         # Limitations: As I don't know how to extract a legal move from a new state
         # increasing the depth to 3 levels or more cannot be performed, 
         # Because there's no (or it hasn't discovered) mechanism to update the 
         # legal move options as the algorithm simulates new state (that will also 
         # generate new set of legal moves)
-        alphabeta_utils,alphabeta_move = max_value(agent_state, opponent_state, 2, initial_move,float('-inf'),float('inf'))
-        time_elapsed = datetime.now() - alg_start
+        alphabeta_utils,alphabeta_move = max_value(agent_state, opponent_state, DEPTH_VALUE, initial_move,float('-inf'),float('inf'))
+        time_elapsed = time.perf_counter() - alg_start
         print(f"AB Pruning: \n Chosen Utility Value: {alphabeta_utils} ; Time elapsed: {time_elapsed}")
 
 
